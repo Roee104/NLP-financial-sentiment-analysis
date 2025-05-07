@@ -1,0 +1,12 @@
+# virtual env
+venv/
+# large datasets
+data/*.gz
+data/*.csv
+# models & checkpoints
+models/
+# cache & py artifacts
+__pycache__/
+*.pyc
+# VS Code
+.vscode/
