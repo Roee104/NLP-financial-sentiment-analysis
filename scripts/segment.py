@@ -40,6 +40,7 @@ def segment_file(input_path, output_path):
 
             # Attach sentence list
             art["sentences"] = [headline] + body_sents
+            art["tickers"] = []  # Placeholder for tickers
 
             fout.write(json.dumps(art, ensure_ascii=False) + "\n")
 
