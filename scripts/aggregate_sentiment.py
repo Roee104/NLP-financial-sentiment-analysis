@@ -71,10 +71,11 @@ def aggregate_article(art: dict) -> dict:
     headline_summary = art["sentences"][0].replace(" <HEADLINE>", "")
 
     return {
-        "article_id": art.get("article_id"),
+        "date": art.get("date"),
         "published": art.get("published"),
         "headline_summary": headline_summary,
         "overall": {"label": overall_lbl, "confidence": overall_conf},
+        "tickers": art.get("tickers", []),
         "sectors_summary": sectors_summary,
     }
 
