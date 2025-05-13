@@ -1,9 +1,5 @@
 # virtual env
 .venv/
-# large datasets
-data/*.gzm
-data/*.gz
-data/*.csv
 # models & checkpoints
 # model binaries / checkpoints   (keep *.py source files!)
 models/**/*.bin
