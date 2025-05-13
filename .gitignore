@@ -1,6 +1,7 @@
 # virtual env
 .venv/
 # large datasets
+data/*.gzm
 data/*.gz
 data/*.csv
 # models & checkpoints
