@@ -13,8 +13,8 @@ from models.finbert import FinBERT
 # Articles per batch and sub-batch size
 ARTICLE_BATCH_SIZE = 100
 SUB_BATCH_SIZE = 32
-# If you know the total number of articles (e.g., 500000), set it here for tqdm
-TOTAL_ARTICLES = 500000
+# If you know the total number of articles (e.g., 10445), set it here for tqdm
+TOTAL_ARTICLES = 10445
 
 
 def main(in_path, out_path):

@@ -6,16 +6,16 @@ Combine sentence‑level FinBERT scores + sector weights into the
 final article‑level JSON schema expected by downstream tools.
 
 Input  : JSONL(.gz) produced by `sentiment_inference.py`, where each record has
-          - article_id, published, headline, sentences
+          - published, headline, sentences
           - sectors  : {"Technology": 0.58, ...}    (weights sum≈1)
           - sentiments: [ {"label":"NEG","confidence":82}, ... ]  (len == sentences)
 
 Output : JSONL.GZ with keys
           {
-            "article_id": "...",
             "published" : "...",
             "headline_summary": "headline without <HEADLINE>",
             "overall" : {"label":"NEG", "confidence":82.3},
+            "tickers" : ["AAPL", ...],
             "sectors_summary": {
                 "Technology": {"weight":0.58, "label":"NEG", "confidence":80.1},
                 ...
@@ -71,8 +71,7 @@ def aggregate_article(art: dict) -> dict:
     headline_summary = art["sentences"][0].replace(" <HEADLINE>", "")
 
     return {
-        "date": art.get("date"),
-        "published": art.get("published"),
+        "published": art.get("date"),
         "headline_summary": headline_summary,
         "overall": {"label": overall_lbl, "confidence": overall_conf},
         "tickers": art.get("tickers", []),
