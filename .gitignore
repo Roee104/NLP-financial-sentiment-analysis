@@ -4,7 +4,12 @@
 data/*.gz
 data/*.csv
 # models & checkpoints
-models/
+# model binaries / checkpoints   (keep *.py source files!)
+models/**/*.bin
+models/**/*.pt
+models/**/*.ckpt
+models/**/__pycache__/
+
 # cache & py artifacts
 __pycache__/
 *.pyc

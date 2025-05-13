@@ -7,7 +7,7 @@ import requests
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 
-INPUT_PATH = "data/news_tickers.jsonl.gz"
+INPUT_PATH = "data/news_tickers_500k.jsonl.gz"
 OUTPUT_PATH = "data/ticker2sector.csv"
 
 # -- Utility: Get sector from yfinance
