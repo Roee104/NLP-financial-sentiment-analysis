@@ -54,11 +54,14 @@ SYSTEM_MSG = (
 )
 
 # ── Helper to build the user prompt ──────────────────────────────────────
-MAX_SENT = 20  # first 20 sentences are enough context
+MAX_SENT = 40  # first 40 sentences are enough context
 
 def build_prompt(article: Dict) -> str:
-    body = "\n".join(article["sentences"][:MAX_SENT])
-    return f"HEADLINE: {article['headline_summary']}\nARTICLE:\n{body}"
+    if "sentences" in article:
+        body_text = "\n".join(article["sentences"][:MAX_SENT])
+    else:                                         # aggregated file
+        body_text = article.get("body", "")[:8000]   # or ""
+    return f"HEADLINE: {article['headline_summary']}\nARTICLE:\n{body_text}"
 
 # ── Main ────────────────────────────────────────────────────────────────
 INP = Path("data/dev_sample_200.jsonl")
@@ -70,7 +73,7 @@ with OUT.open("w", encoding="utf-8") as fout:
     for art in tqdm(records, desc="GPT‑labelling"):
         for attempt in range(3):
             try:
-                resp = openai.ChatCompletion.create(
+                resp = openai.chat.completions.create(
                     model="gpt-4o-mini",
                     temperature=0,
                     messages=[
@@ -82,6 +85,7 @@ with OUT.open("w", encoding="utf-8") as fout:
                 fout.write(json.dumps(labelled, ensure_ascii=False)+"\n")
                 break
             except Exception as e:
+                print("error:", type(e).__name__, "-", e)
                 if attempt==2:
                     print("❌ failed on article:", art["headline_summary"][:60], file=sys.stderr)
                 time.sleep(1.5)  # simple backoff
