@@ -45,7 +45,7 @@ extract: $(TICKERS_10K)
 # sectors – builds / refreshes ticker→sector lookup (idempotent)
 # --------------------------------------------------------------------------
 sectors:
-	$(PYTHON) scripts/build_sector_map.py    # writes sector_map_filled.json
+	$(PYTHON) scripts/build_ticker2sector.py    # writes sector_map_filled.json
 
 # --------------------------------------------------------------------------
 # enrich – add sector weights to each article
