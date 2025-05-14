@@ -1,92 +1,129 @@
 #!/usr/bin/env python3
 """
-evaluate.py  (NEW SCHEMA)
-Compare model predictions (news_final_10k…) vs gold (dev_gold_200.jsonl).
+evaluate.py
+-----------
+Compare pipeline predictions vs. GPT-gold labels
+and save:
 
-Assumes both files have top-level keys:
-  headline_summary, overall.{label,confidence}
+  • overall_report.csv       (classification report)
+  • confusion_matrix.png     (normalised heat-map)
+  • ece.txt                  (Expected Calibration Error)
 
-Outputs:
-  results/overall_report.csv
-  results/confusion_matrix.png
-  results/ece.txt
+Usage
+-----
+    python scripts/evaluate.py \
+        data/news_final_10k.jsonl.gz \
+        data/dev_gold_200.jsonl
 """
 
 from __future__ import annotations
+
+import argparse
 import gzip
 import json
 import pathlib
-import argparse
+from collections import defaultdict
+from typing import Dict, Iterator, List
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import matplotlib.pyplot as plt
 from sklearn.metrics import classification_report, confusion_matrix
 
 LABELS = ["NEG", "NEU", "POS"]
 OUTDIR = pathlib.Path("results")
 OUTDIR.mkdir(exist_ok=True)
 
+# ---------------------------------------------------------------------------
 
-def load(path: pathlib.Path):
-    op = gzip.open if path.suffix == ".gz" else open
-    with op(path, "rt", encoding="utf-8") as f:
+
+def load(path: pathlib.Path) -> Iterator[Dict]:
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rt", encoding="utf-8") as f:
         for line in f:
             yield json.loads(line)
 
 
-def ece(probs, correct, bins: int = 10):
-    bins = np.linspace(0, 1, bins + 1)
-    tot = 0
+def expected_calibration_error(
+    confidences: List[float], correct: List[int], n_bins: int = 10
+) -> float:
+    """Equal-width ECE over *n_bins*."""
+    bins = np.linspace(0, 1, n_bins + 1)
+    ece = 0.0
     for lo, hi in zip(bins[:-1], bins[1:]):
-        idx = [i for i, p in enumerate(probs) if lo <= p < hi]
+        idx = [i for i, p in enumerate(confidences) if lo <= p < hi]
         if not idx:
             continue
         acc = np.mean([correct[i] for i in idx])
-        conf = np.mean([probs[i] for i in idx])
-        tot += abs(acc - conf) * len(idx) / len(probs)
-    return tot
+        conf = np.mean([confidences[i] for i in idx])
+        ece += abs(acc - conf) * len(idx) / len(confidences)
+    return ece
 
 
-def main(pred_path: str, gold_path: str):
-    pred = {r["headline_summary"]: r for r in load(pathlib.Path(pred_path))}
-    gold = {r["headline_summary"]: r for r in load(pathlib.Path(gold_path))}
-    shared = pred.keys() & gold.keys()
+# ---------------------------------------------------------------------------
+
+
+def main(pred_path: str, gold_path: str) -> None:
+    pred_file = pathlib.Path(pred_path)
+    gold_file = pathlib.Path(gold_path)
+
+    preds = {r["headline_summary"]: r for r in load(pred_file)}
+    golds = {r["headline_summary"]: r for r in load(gold_file)}
+
+    shared = preds.keys() & golds.keys()
     if not shared:
-        raise SystemExit("No overlapping headlines between pred and gold!")
+        raise SystemExit("❌ No overlapping headline_summary keys!")
 
-    y_true, y_pred, confs = [], [], []
+    if len(preds) != len(set(preds)):
+        print("⚠ duplicate headlines in predictions (keeping last occurrence)")
+
+    y_true, y_pred, conf = [], [], []
     for h in shared:
-        y_true.append(gold[h]["overall"]["label"])
-        y_pred.append(pred[h]["overall"]["label"])
-        confs.append(pred[h]["overall"]["confidence"] / 100)
+        y_true.append(golds[h]["overall"]["label"])
+        y_pred.append(preds[h]["overall"]["label"])
+        conf.append(preds[h]["overall"]["confidence"] / 100)
 
-    report = classification_report(
-        y_true, y_pred, labels=LABELS, output_dict=True
-    )
-    pd.DataFrame(report).T.to_csv(
+    # ---------- 1. classification report -------------------------------
+    rpt = classification_report(
+        y_true, y_pred, labels=LABELS, output_dict=True)
+    pd.DataFrame(rpt).T.to_csv(
         OUTDIR / "overall_report.csv", float_format="%.3f")
+    print(pd.DataFrame(rpt).T.round(3))
 
+    # ---------- 2. confusion matrix ------------------------------------
     cm = confusion_matrix(y_true, y_pred, labels=LABELS, normalize="true")
-    sns.heatmap(cm, annot=True, cmap="Blues",
-                xticklabels=LABELS, yticklabels=LABELS, fmt=".2f")
-    plt.title("Normalized Confusion Matrix")
-    plt.xlabel("Pred")
+    plt.figure(figsize=(4, 3))
+    sns.heatmap(
+        cm,
+        annot=True,
+        cmap="Reds",          # light = good, dark = bad
+        xticklabels=LABELS,
+        yticklabels=LABELS,
+        fmt=".2f",
+        annot_kws={"size": 9},
+    )
+    plt.title("Normalised Confusion Matrix")
+    plt.xlabel("Predicted")
     plt.ylabel("Gold")
     plt.tight_layout()
     plt.savefig(OUTDIR / "confusion_matrix.png", dpi=200)
     plt.close()
 
+    # ---------- 3. calibration -----------------------------------------
     correct_bin = [1 if a == b else 0 for a, b in zip(y_true, y_pred)]
-    (OUTDIR /
-     "ece.txt").write_text(f"ECE overall = {ece(confs, correct_bin):.4f}\n")
+    ece_val = expected_calibration_error(conf, correct_bin)
+    (OUTDIR / "ece.txt").write_text(f"ECE overall = {ece_val:.4f}\n")
+    print(f"ECE overall = {ece_val:.4f}")
 
-    print("✅ metrics written to", OUTDIR)
+    print("✅ metrics & plots written to", OUTDIR)
 
+
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    a = argparse.ArgumentParser()
-    a.add_argument("pred")
-    a.add_argument("gold")
-    args = a.parse_args()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("pred", help="news_final_10k.jsonl[.gz]")
+    ap.add_argument("gold", help="dev_gold_200.jsonl")
+    args = ap.parse_args()
     main(args.pred, args.gold)
